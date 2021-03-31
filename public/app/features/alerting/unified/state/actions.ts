@@ -1,25 +1,25 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { ThunkResult } from 'app/types';
 import { RuleNamespace } from 'app/types/unified-alerting';
+import { RulerRulesConfigDTO } from 'app/types/unified-alerting-dto';
 import { fetchRules } from '../api/prometheus';
-import { getRulesDataSources, GRAFANA_RULES_SOURCE_NAME } from '../utils/datasource';
+import { fetchRulerRules } from '../api/ruler';
 import { withSerializedError } from '../utils/redux';
 
-/*
- * Will need to be updated to:
- *
- * 1. Fetch grafana managed rules when the endpoint becomes available
- * 2. Reconcile with rules from the ruler where ruler is available
- */
-
-export const fetchRulesAction = createAsyncThunk(
-  'unifiedalerting/fetchRules',
+export const fetchPromRulesAction = createAsyncThunk(
+  'unifiedalerting/fetchPromRules',
   (rulesSourceName: string): Promise<RuleNamespace[]> => withSerializedError(fetchRules(rulesSourceName))
 );
 
-export const fetchRulesFromAllSourcesAction = (): ThunkResult<void> => {
-  return async (dispatch) => {
-    getRulesDataSources().forEach((ds) => dispatch(fetchRulesAction(ds.name)));
-    dispatch(fetchRulesAction(GRAFANA_RULES_SOURCE_NAME));
-  };
-};
+export const fetchRulerRulesAction = createAsyncThunk(
+  'unifiedalerting/fetchRulerRules',
+  (rulesSourceName: string): Promise<RulerRulesConfigDTO | null> => {
+    return withSerializedError(
+      fetchRulerRules(rulesSourceName).catch((e) => {
+        if (e.status === 500 && e.data?.message?.includes('mapping values are not allowed in this context')) {
+          return;
+        }
+        return e;
+      })
+    );
+  }
+);

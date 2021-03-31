@@ -1,9 +1,9 @@
 import { combineReducers } from 'redux';
 import { createAsyncMapSlice } from '../utils/redux';
-import { fetchRulesAction } from './actions';
+import { fetchPromRulesAction } from './actions';
 
 export const reducer = combineReducers({
-  rules: createAsyncMapSlice('rules', fetchRulesAction, (dataSourceName) => dataSourceName).reducer,
+  promRules: createAsyncMapSlice('promRules', fetchPromRulesAction, (dataSourceName) => dataSourceName).reducer,
 });
 
 export type UnifiedAlertingState = ReturnType<typeof reducer>;
