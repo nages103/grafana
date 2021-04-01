@@ -1,11 +1,12 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
 import { ThunkResult } from 'app/types';
-import { RuleNamespace } from 'app/types/unified-alerting';
+import { RuleLocation, RuleNamespace } from 'app/types/unified-alerting';
 import { RulerRulesConfigDTO } from 'app/types/unified-alerting-dto';
 import { fetchRules } from '../api/prometheus';
-import { fetchRulerRules } from '../api/ruler';
-import { getAllRulesSourceNames } from '../utils/datasource';
+import { deleteRulerRulesGroup, fetchRulerRules, fetchRulerRulesNamespace, setRulerRuleGroup } from '../api/ruler';
+import { getAllRulesSourceNames, isCloudRulesSource } from '../utils/datasource';
 import { withSerializedError } from '../utils/redux';
+import { hashRulerRule } from '../utils/rules';
 
 export const fetchPromRulesAction = createAsyncThunk(
   'unifiedalerting/fetchPromRules',
@@ -30,5 +31,35 @@ export function fetchAllPromAndRulerRules(force = false): ThunkResult<void> {
         dispatch(fetchRulerRulesAction(name));
       }
     });
+  };
+}
+
+export function deleteRuleAction(ruleLocation: RuleLocation): ThunkResult<void> {
+  /*
+   * fetch the rules group from backend, delete group if it is found and+
+   * reload ruler rules
+   */
+  return async (dispatch) => {
+    const { namespace, groupName, ruleSourceName, ruleHash } = ruleLocation;
+    //const group = await fetchRulerRulesGroup(ruleSourceName, namespace, groupName);
+    const groups = await fetchRulerRulesNamespace(ruleSourceName, namespace);
+    const group = groups.find((group) => group.name === groupName);
+    if (!group) {
+      throw new Error('Failed to delete rule: group not found.');
+    }
+    const existingRule = group.rules.find((rule) => hashRulerRule(rule) === ruleHash);
+    if (!existingRule) {
+      throw new Error('Failed to delete rule: group not found.');
+    }
+    // for cloud datasources, delete group if this rule is the last rule
+    if (group.rules.length === 1 && isCloudRulesSource(ruleSourceName)) {
+      await deleteRulerRulesGroup(ruleSourceName, namespace, groupName);
+    } else {
+      await setRulerRuleGroup(ruleSourceName, namespace, {
+        ...group,
+        rules: group.rules.filter((rule) => rule !== existingRule),
+      });
+    }
+    return dispatch(fetchRulerRulesAction(ruleSourceName));
   };
 }
